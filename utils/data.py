@@ -3,8 +3,8 @@ from torchvision import datasets, transforms
 from utils.toolkit import split_images_labels
 
 
-class iData(object):
-    train_trsf = []
+class iData(object):# i for incremental
+    train_trsf = [] # trsf-transform
     test_trsf = []
     common_trsf = []
     class_order = None
@@ -23,12 +23,12 @@ class iCIFAR10(iData):
         transforms.Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010)),
     ]
 
-    class_order = np.arange(10).tolist()
+    class_order = np.arange(10).tolist() # a list that indictate the total number of classes in the dataset.
 
     def download_data(self):
         train_dataset = datasets.cifar.CIFAR10('./data', train=True, download=True)
         test_dataset = datasets.cifar.CIFAR10('./data', train=False, download=True)
-        self.train_data, self.train_targets = train_dataset.data, np.array(train_dataset.targets)
+        self.train_data, self.train_targets = train_dataset.data, np.array(train_dataset.targets) #TODO train_dataset.data type
         self.test_data, self.test_targets = test_dataset.data, np.array(test_dataset.targets)
 
 
@@ -54,7 +54,7 @@ class iCIFAR100(iData):
         self.test_data, self.test_targets = test_dataset.data, np.array(test_dataset.targets)
 
 
-class iImageNet1000(iData):
+class iImageNet1000(iData):#i.e, ILSVRC2012
     use_path = True
     train_trsf = [
         transforms.RandomResizedCrop(224),
@@ -76,7 +76,7 @@ class iImageNet1000(iData):
         train_dir = '/data15/Public/Datasets/ilsvrc2012/train/'
         test_dir = '/data15/Public/Datasets/ilsvrc2012/val/'
 
-        train_dset = datasets.ImageFolder(train_dir)
+        train_dset = datasets.ImageFolder(train_dir) # see toolkit.py
         test_dset = datasets.ImageFolder(test_dir)
 
         self.train_data, self.train_targets = split_images_labels(train_dset.imgs)

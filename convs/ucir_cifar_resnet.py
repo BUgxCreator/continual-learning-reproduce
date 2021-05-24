@@ -96,6 +96,9 @@ class CifarResNet(nn.Module):
     ResNet optimized for the Cifar Dataset, as specified in
     https://arxiv.org/abs/1512.03385.pdf
     """
+    '''@Author:defeng
+        in this paper, the resnet family was proposed by Kaiming He et al..
+    '''
 
     def __init__(self, block, depth, channels=3):
         super(CifarResNet, self).__init__()
@@ -143,7 +146,7 @@ class CifarResNet(nn.Module):
     def forward(self, x):
         x = self.conv_1_3x3(x)  # [bs, 16, 32, 32]
         x = F.relu(self.bn_1(x), inplace=True)
-
+        # 3 stanges are corresponded to the paper section 4.2 in which it mentioned "3n".
         x_1 = self.stage_1(x)  # [bs, 16, 32, 32]
         x_2 = self.stage_2(x_1)  # [bs, 32, 16, 16]
         x_3 = self.stage_3(x_2)  # [bs, 64, 8, 8]
@@ -154,7 +157,7 @@ class CifarResNet(nn.Module):
 
         return {
             'fmaps': [x_1, x_2, x_3],
-            'features': features
+            'features': features#final layer output feature vector
         }
 
     @property

@@ -17,12 +17,12 @@ class SimpleLinear(nn.Module):
         super(SimpleLinear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
+        self.weight = nn.Parameter(torch.Tensor(out_features, in_features))#shape:(out_features, in_features),bacause y=xA^T+b
         if bias:
             self.bias = nn.Parameter(torch.Tensor(out_features))
         else:
-            self.register_parameter('bias', None)
-        self.reset_parameters()
+            self.register_parameter('bias', None)#TODO
+        self.reset_parameters()#initialization
 
     def reset_parameters(self):
         nn.init.kaiming_uniform_(self.weight, nonlinearity='linear')
@@ -30,6 +30,13 @@ class SimpleLinear(nn.Module):
 
     def forward(self, input):
         return {'logits': F.linear(input, self.weight, self.bias)}
+
+
+'''@Author:defeng 22 May 2021 (Saturday)
+    CosineLinear and SplitCosineLinear are only used in .../utils/inc_net.py,
+    specifically, the class CosineIncrementalNet().
+
+'''
 
 
 class CosineLinear(nn.Module):
@@ -40,6 +47,10 @@ class CosineLinear(nn.Module):
         self.nb_proxy = nb_proxy
         self.to_reduce = to_reduce
         self.weight = nn.Parameter(torch.Tensor(self.out_features, in_features))
+        '''@Author:defeng
+            sigma is actually the learnable parameter eta in ucir.
+            see ucir Eq 4. for detail.
+        '''
         if sigma:
             self.sigma = nn.Parameter(torch.Tensor(1))
         else:
@@ -53,7 +64,7 @@ class CosineLinear(nn.Module):
             self.sigma.data.fill_(1)
 
     def forward(self, input):
-        out = F.linear(F.normalize(input, p=2, dim=1), F.normalize(self.weight, p=2, dim=1))
+        out = F.linear(F.normalize(input, p=2, dim=1), F.normalize(self.weight, p=2, dim=1))# i.e., cosine normalizaion of Eq 4.
 
         if self.to_reduce:
             # Reduce_proxy
@@ -101,8 +112,8 @@ class SplitCosineLinear(nn.Module):
 def reduce_proxies(out, nb_proxy):
     if nb_proxy == 1:
         return out
-    bs = out.shape[0]
-    nb_classes = out.shape[1] / nb_proxy
+    bs = out.shape[0] #bs-batch_size
+    nb_classes = out.shape[1] / nb_proxy # shape[1]--numOfclasses
     assert nb_classes.is_integer(), 'Shape error'
     nb_classes = int(nb_classes)
 

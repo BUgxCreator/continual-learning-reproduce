@@ -37,38 +37,43 @@ class BaseNet(nn.Module):
     def __init__(self, convnet_type, pretrained):
         super(BaseNet, self).__init__()
 
-        self.convnet = get_convnet(convnet_type, pretrained)
+        self.convnet = get_convnet(convnet_type, pretrained)#backbone/feature_extractor
         self.fc = None
 
-    @property
+    @property #use Class.function as Class property(attri)
     def feature_dim(self):
         return self.convnet.out_dim
 
-    def extract_vector(self, x):
+    def extract_vector(self, x): #feature vector
         return self.convnet(x)['features']
 
     def forward(self, x):
         x = self.convnet(x)
         out = self.fc(x['features'])
-        '''
+        '''@Author:defeng
+            what's in side x: (details can be found in convs folder)
         {
             'fmaps': [x_1, x_2, ..., x_n],
             'features': features
-            'logits': logits
         }
         '''
         out.update(x)
+        '''@Author:defeng
+            notice: out(*i.e., self.fc(...)*) is not a tensor but a python dict(*see linears.py*) for details.
+            so the .update() method is actually a python dict method.
+            see for details: http://c.biancheng.net/view/4386.html
+        '''
 
         return out
 
-    def update_fc(self, nb_classes):
+    def update_fc(self, nb_classes):#nb stands for number, so nb_classes is equal to numOfclasses. e.g., nb_output = self.fc.out_features
         pass
 
     def generate_fc(self, in_dim, out_dim):
         pass
 
     def copy(self):
-        return copy.deepcopy(self)
+        return copy.deepcopy(self)# copy self and return
 
     def freeze(self):
         for param in self.parameters():
@@ -76,6 +81,9 @@ class BaseNet(nn.Module):
         self.eval()
 
         return self
+    '''@Author:defeng
+        easy to understand freeze.
+    '''
 
 
 class IncrementalNet(BaseNet):
@@ -84,7 +92,7 @@ class IncrementalNet(BaseNet):
         super().__init__(convnet_type, pretrained)
         self.gradcam = gradcam
         if hasattr(self, 'gradcam') and self.gradcam:
-            self._gradcam_hooks = [None, None]
+            self._gradcam_hooks = [None, None] # cos there are only two hooks, forward and backward hooks.
             self.set_gradcam_hook()
 
     def update_fc(self, nb_classes):
@@ -95,6 +103,13 @@ class IncrementalNet(BaseNet):
             bias = copy.deepcopy(self.fc.bias.data)
             fc.weight.data[:nb_output] = weight
             fc.bias.data[:nb_output] = bias
+            '''@Author:defeng
+                like I expected, when increasing nb_classes, you need to modify out_features of the classifier to match the nb_classes.
+                In order to do that, you will have to:
+                    1. using generate_fc() to generate a new fc.
+                    2. using "slicing" to move the params in old fc to the new fc.
+                    3. delete the old fc from main memory.
+            '''
 
         del self.fc
         self.fc = fc
@@ -119,21 +134,30 @@ class IncrementalNet(BaseNet):
         self._gradcam_hooks[1].remove()
         self._gradcam_hooks[0] = None
         self._gradcam_hooks[1] = None
-        self._gradcam_gradients, self._gradcam_activations = [None], [None]
+        self._gradcam_gradients, self._gradcam_activations = [None], [None] # len=1
 
     def set_gradcam_hook(self):
-        self._gradcam_gradients, self._gradcam_activations = [None], [None]
+        self._gradcam_gradients, self._gradcam_activations = [None], [None] #Variables to store grad and activations
 
         def backward_hook(module, grad_input, grad_output):
-            self._gradcam_gradients[0] = grad_output[0]
+            self._gradcam_gradients[0] = grad_output[0] # grad_output[0].detach() is preferable!
             return None
 
         def forward_hook(module, input, output):
-            self._gradcam_activations[0] = output
+            self._gradcam_activations[0] = output #output, i.e., activation
             return None
 
         self._gradcam_hooks[0] = self.convnet.last_conv.register_backward_hook(backward_hook)
         self._gradcam_hooks[1] = self.convnet.last_conv.register_forward_hook(forward_hook)
+        '''@Author:defeng
+            forward_hook: get activation map A
+            backward_hook: get grad from network classifier output(logits) to the activation map A
+            see for details: Grad-CAM paper.    
+        '''
+
+        '''@Author:defeng
+            info about torch register_XX_hook fucntion can be found in: https://blog.csdn.net/u011995719/article/details/97752853
+        '''
 
 
 class CosineIncrementalNet(BaseNet):
@@ -158,7 +182,7 @@ class CosineIncrementalNet(BaseNet):
         self.fc = fc
 
     def generate_fc(self, in_dim, out_dim):
-        if self.fc is None:
+        if self.fc is None:# flag for determing whether is is the first increment or not.
             fc = CosineLinear(in_dim, out_dim, self.nb_proxy, to_reduce=True)
         else:
             prev_out_features = self.fc.out_features // self.nb_proxy
@@ -166,8 +190,14 @@ class CosineIncrementalNet(BaseNet):
             fc = SplitCosineLinear(in_dim, prev_out_features, out_dim - prev_out_features, self.nb_proxy)
 
         return fc
+        '''@Author:defeng
+            from the condition:"if self.fc is None:", we can know that
+        '''
 
-
+'''@Author:defeng
+    TODO bias correction 来自哪篇文章？ BiC
+'''
+# -----------------------------------------------------------------
 class BiasLayer(nn.Module):
     def __init__(self):
         super(BiasLayer, self).__init__()
@@ -183,7 +213,7 @@ class BiasLayer(nn.Module):
         return (self.alpha.item(), self.beta.item())
 
 
-class IncrementalNetWithBias(BaseNet):
+class IncrementalNetWithBias(BaseNet): #TODO only used in BiC
     def __init__(self, convnet_type, pretrained, bias_correction=False):
         super().__init__(convnet_type, pretrained)
 

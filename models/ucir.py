@@ -47,15 +47,15 @@ class UCIR(BaseLearner):
 
     def after_task(self):
         # self.save_checkpoint()
-        self._old_network = self._network.copy().freeze()
-        self._known_classes = self._total_classes
+        self._old_network = self._network.copy().freeze() # from ucir paper, easy to understand.
+        self._known_classes = self._total_classes # _known_classes is the old_classes which the model have trained on.
         logging.info('Exemplar size: {}'.format(self.exemplar_size))
 
-    def incremental_train(self, data_manager):
+    def incremental_train(self, data_manager): #external call in trainer.py
         self._cur_task += 1
-        self._total_classes = self._known_classes + data_manager.get_task_size(self._cur_task)
-        self._network.update_fc(self._total_classes, self._cur_task)
-        logging.info('Learning on {}-{}'.format(self._known_classes, self._total_classes))
+        self._total_classes = self._known_classes + data_manager.get_task_size(self._cur_task)#total-known = task_size
+        self._network.update_fc(self._total_classes, self._cur_task) #update based on new class nb.
+        logging.info('Learning on {}-{}'.format(self._known_classes, self._total_classes)) #total-known = task_size
 
         # Loader
         train_dset = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes), source='train',
@@ -66,9 +66,12 @@ class UCIR(BaseLearner):
 
         # Procedure
         self._train(self.train_loader, self.test_loader)
-        self.build_rehearsal_memory(data_manager, self.samples_per_class)
+        self.build_rehearsal_memory(data_manager, self.samples_per_class) # see base.py
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
+            '''@Author:defeng
+                the reason call .module: https://www.zhihu.com/question/67726969/answer/511220696
+            '''
 
     def _train(self, train_loader, test_loader):
         '''
@@ -95,7 +98,7 @@ class UCIR(BaseLearner):
             ignored_params = list(map(id, self._network.fc.fc1.parameters()))
             base_params = filter(lambda p: id(p) not in ignored_params, self._network.parameters())
             network_params = [{'params': base_params, 'lr': lrate, 'weight_decay': weight_decay},
-                              {'params': self._network.fc.fc1.parameters(), 'lr': 0, 'weight_decay': 0}]
+                              {'params': self._network.fc.fc1.parameters(), 'lr': 0, 'weight_decay': 0}] # lr=0 means freeze.
         optimizer = optim.SGD(network_params, lr=lrate, momentum=0.9, weight_decay=weight_decay)
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=milestones, gamma=lrate_decay)
 
@@ -109,7 +112,7 @@ class UCIR(BaseLearner):
 
     def _run(self, train_loader, test_loader, optimizer, scheduler):
         for epoch in range(1, epochs+1):
-            self._network.train()
+            self._network.train() # set train mode
             ce_losses = 0.
             lf_losses = 0.
             is_losses = 0.
@@ -117,20 +120,26 @@ class UCIR(BaseLearner):
             for i, (_, inputs, targets) in enumerate(train_loader):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
                 outputs = self._network(inputs)
-                logits = outputs['logits']  # Final outputs after scaling  (bs, nb_classes)
-                features = outputs['features']  # Features before fc layer  (bs, 64)
-                ce_loss = F.cross_entropy(logits, targets)  # Cross entropy loss
+                logits = outputs['logits']  # Final outputs after scaling  (bs, nb_classes), |* i.e., befroe probs=softmax(logits)
+                features = outputs['features']  # Features before fc layer  (bs, 64) |* i.e., feature vector from feature extractor(backbone)
+                ce_loss = F.cross_entropy(logits, targets)  # Cross entropy loss |* cross_entrophy implicityly implement softmax, so its input is logits.
 
                 lf_loss = 0.  # Less forgetting loss
-                is_loss = 0.  # Inter-class speration loss
+                is_loss = 0.  # Inter-class speration loss, i.e. margin ranking loss. Eq 8.
                 if self._old_network is not None:
                     old_outputs = self._old_network(inputs)
                     old_features = old_outputs['features']  # Features before fc layer
                     lf_loss = F.cosine_embedding_loss(features, old_features.detach(),
-                                                      torch.ones(inputs.shape[0]).to(self._device)) * self.lamda
+                                                      torch.ones(inputs.shape[0]).to(self._device)) * self.lamda # Eq 6.
 
                     scores = outputs['new_scores']  # Scores before scaling  (bs, nb_new)
                     old_scores = outputs['old_scores']  # Scores before scaling  (bs, nb_old)
+                    '''@Author:defeng
+                        24 May 2021 (Monday)
+                        see Line 45 here, we know ucir uses CosineincNet and CosineincNet uses (Split)CosineLinearLayer.
+                        Line 93 forward function of SplitCosineLinearLayer, "out" times(X) the scaling factor eta while out1/2 doesn't.
+                        (CosineLinearLayer does not have the new/old_scores.)
+                    '''
                     old_classes_mask = np.where(tensor2numpy(targets) < self._known_classes)[0]
                     if len(old_classes_mask) != 0:
                         scores = scores[old_classes_mask]  # (n, nb_new)
@@ -158,6 +167,7 @@ class UCIR(BaseLearner):
                 is_losses += is_loss.item() if self._cur_task != 0 and len(old_classes_mask) != 0 else is_loss
 
                 # acc
+                # TODO cur_task的作用？结合base.py | TODO 理解这里acc的计算。 | TODO get_dataset_with_split
                 _, preds = torch.max(logits, dim=1)
                 correct += preds.eq(targets.expand_as(preds)).cpu().sum()
                 total += len(targets)

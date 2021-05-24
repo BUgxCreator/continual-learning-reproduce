@@ -130,7 +130,7 @@ class BaseLearner(object):
         vectors, y_true = self._extract_vectors(loader)
         vectors = (vectors.T / (np.linalg.norm(vectors.T, axis=0) + EPSILON)).T
 
-        dists = cdist(class_means, vectors, 'sqeuclidean')  # [nb_classes, N]
+        dists = cdist(class_means, vectors, 'sqeuclidean')  # [nb_classes, N] |* sqeuclidean: sq for square(^2).
         scores = dists.T  # [N, nb_classes], choose the one with the smallest distance
 
         return np.argsort(scores, axis=1)[:, :self.topk], y_true  # [N, topk]

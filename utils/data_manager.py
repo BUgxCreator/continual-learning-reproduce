@@ -10,11 +10,13 @@ class DataManager(object):
     def __init__(self, dataset_name, shuffle, seed, init_cls, increment):
         self.dataset_name = dataset_name
         self._setup_data(dataset_name, shuffle, seed)
-        assert init_cls <= len(self._class_order), 'No enough classes.'
+        assert init_cls <= len(self._class_order), 'No enough classes.' 
+        # len(_class_order) == total numOfclasses of one dataset. see _setup_data().
+        # init_cls has to be less than the len(_class_order) otherwise throws an error.
         self._increments = [init_cls]
         while sum(self._increments) + increment < len(self._class_order):
             self._increments.append(increment)
-        offset = len(self._class_order) - sum(self._increments)
+        offset = len(self._class_order) - sum(self._increments) # i.e., not drop last.
         if offset > 0:
             self._increments.append(offset)
 
@@ -22,10 +24,11 @@ class DataManager(object):
     def nb_tasks(self):
         return len(self._increments)
 
-    def get_task_size(self, task):
+    def get_task_size(self, task): # get certain task sise.
         return self._increments[task]
 
     def get_dataset(self, indices, source, mode, appendent=None, ret_data=False):
+        # get data and targets.
         if source == 'train':
             x, y = self._train_data, self._train_targets
         elif source == 'test':
@@ -33,10 +36,11 @@ class DataManager(object):
         else:
             raise ValueError('Unknown data source {}.'.format(source))
 
+        # transformation
         if mode == 'train':
             trsf = transforms.Compose([*self._train_trsf, *self._common_trsf])
         elif mode == 'flip':
-            trsf = transforms.Compose([*self._test_trsf, transforms.RandomHorizontalFlip(p=1.), *self._common_trsf])
+            trsf = transforms.Compose([*self._test_trsf, transforms.RandomHorizontalFlip(p=1.), *self._common_trsf]) # should certain experiment that requires flip transformation.
         elif mode == 'test':
             trsf = transforms.Compose([*self._test_trsf, *self._common_trsf])
         else:
@@ -48,19 +52,23 @@ class DataManager(object):
             data.append(class_data)
             targets.append(class_targets)
 
+        '''@Author:defeng
+            TODO appendent and ret_data
+        '''
+
         if appendent is not None and len(appendent) != 0:
             appendent_data, appendent_targets = appendent
             data.append(appendent_data)
             targets.append(appendent_targets)
 
-        data, targets = np.concatenate(data), np.concatenate(targets)
+        data, targets = np.concatenate(data), np.concatenate(targets) # concat a python list.
 
         if ret_data:
             return data, targets, DummyDataset(data, targets, trsf, self.use_path)
         else:
             return DummyDataset(data, targets, trsf, self.use_path)
 
-    def get_dataset_with_split(self, indices, source, mode, appendent=None, val_samples_per_class=0):
+    def get_dataset_with_split(self, indices, source, mode, appendent=None, val_samples_per_class=0): #TODO related to BiC
         if source == 'train':
             x, y = self._train_data, self._train_targets
         elif source == 'test':
@@ -79,7 +87,7 @@ class DataManager(object):
         val_data, val_targets = [], []
         for idx in indices:
             class_data, class_targets = self._select(x, y, low_range=idx, high_range=idx+1)
-            val_indx = np.random.choice(len(class_data), val_samples_per_class, replace=False)
+            val_indx = np.random.choice(len(class_data), val_samples_per_class, replace=False) # not all the data in class_data(only val_samples_per_class) will be validated.
             train_indx = list(set(np.arange(len(class_data))) - set(val_indx))
             val_data.append(class_data[val_indx])
             val_targets.append(class_targets[val_indx])
@@ -88,7 +96,7 @@ class DataManager(object):
 
         if appendent is not None:
             appendent_data, appendent_targets = appendent
-            for idx in range(0, int(np.max(appendent_targets))+1):
+            for idx in range(0, int(np.max(appendent_targets))+1): # same process(i.e., val_samples_per_class) like the "for" iteration above
                 append_data, append_targets = self._select(appendent_data, appendent_targets,
                                                            low_range=idx, high_range=idx+1)
                 val_indx = np.random.choice(len(append_data), val_samples_per_class, replace=False)
@@ -119,7 +127,7 @@ class DataManager(object):
         self._common_trsf = idata.common_trsf
 
         # Order
-        order = [i for i in range(len(np.unique(self._train_targets)))]
+        order = [i for i in range(len(np.unique(self._train_targets)))] # use unique to calculate the numOfclasses.
         if shuffle:
             np.random.seed(seed)
             order = np.random.permutation(len(order)).tolist()
@@ -129,8 +137,13 @@ class DataManager(object):
         logging.info(self._class_order)
 
         # Map indices
-        self._train_targets = _map_new_class_index(self._train_targets, self._class_order)
+        self._train_targets = _map_new_class_index(self._train_targets, self._class_order) # TODO How to use?
         self._test_targets = _map_new_class_index(self._test_targets, self._class_order)
+        '''@Author:defeng
+            from "Map indices" and "Order", we can know that order is to provide different "increment sequence". 
+            if shuffle, the sequence will be randomly permuted.
+            if not shuffle, the sequence will be linear.
+        '''
 
     def _select(self, x, y, low_range, high_range):
         idxes = np.where(np.logical_and(y >= low_range, y < high_range))[0]
@@ -150,9 +163,12 @@ class DummyDataset(Dataset):
 
     def __getitem__(self, idx):
         if self.use_path:
-            image = self.trsf(pil_loader(self.images[idx]))
+            image = self.trsf(pil_loader(self.images[idx])) # slicing not supported! see pil_loader.
         else:
             image = self.trsf(Image.fromarray(self.images[idx]))
+        '''@Author:defeng
+            if use_path, then read image from path, else read image from ndarray.
+        '''
         label = self.labels[idx]
 
         return idx, image, label
@@ -199,7 +215,10 @@ def accimage_loader(path):
         # Potentially a decoding problem, fall back to PIL.Image
         return pil_loader(path)
 
-
+'''@Author:defeng
+    23 May 2021 (Sunday)
+    not used.
+'''
 def default_loader(path):
     '''
     Ref:

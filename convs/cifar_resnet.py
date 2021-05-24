@@ -97,6 +97,9 @@ class CifarResNet(nn.Module):
 
         # Model type specifies number of layers for CIFAR-10 and CIFAR-100 model
         assert (depth - 2) % 6 == 0, 'depth should be one of 20, 32, 44, 56, 110'
+        '''@Author:defeng
+            see for details: 4.2. CIFAR-10 and Analysis
+        '''
         layer_blocks = (depth - 2) // 6
 
         self.conv_1_3x3 = nn.Conv2d(channels, 16, kernel_size=3, stride=1, padding=1, bias=False)
@@ -148,7 +151,7 @@ class CifarResNet(nn.Module):
 
         return {
             'fmaps': [x_1, x_2, x_3],
-            'features': features
+            'features': features#final layer output feature vector
         }
 
     @property

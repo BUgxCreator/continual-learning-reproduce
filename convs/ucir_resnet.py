@@ -6,6 +6,14 @@ import torch
 import torch.nn as nn
 from torchvision.models.utils import load_state_dict_from_url
 
+'''@Author:defeng
+    the .../convs/resnet.py is the original implementation of the torchvision.models as mentioned in .../convs/resnet.py.
+
+    *the ucir_resnet made a slight changes to the resnet implemented by torchvision*(i.e., .../convs/resnet.py), for it is written in the ucir paper that
+    "We adopt a 32-layer ResNet for CIFAR100 and a 18-layer ResNet for ImageNet. When adopting cosine normalization *in the 
+    last layer, the ReLU in the penultimate layer is removed* to allow the features to take both positive and negative values."
+'''
+
 
 __all__ = ['resnet50']
 
@@ -228,7 +236,7 @@ class ResNet(nn.Module):
 
         return {
             'fmaps': [x_1, x_2, x_3, x_4],
-            'features': features
+            'features': features#final layer output feature vector
         }
 
     def forward(self, x):

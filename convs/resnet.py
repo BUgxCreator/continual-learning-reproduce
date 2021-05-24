@@ -168,6 +168,9 @@ class ResNet(nn.Module):
         # Zero-initialize the last BN in each residual branch,
         # so that the residual branch starts with zeros, and each residual block behaves like an identity.
         # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
+        '''@Author:defeng
+            
+        '''
         if zero_init_residual:
             for m in self.modules():
                 if isinstance(m, Bottleneck):
@@ -217,7 +220,7 @@ class ResNet(nn.Module):
 
         return {
             'fmaps': [x_1, x_2, x_3, x_4],
-            'features': features
+            'features': features #final layer output feature vector
         }
 
     def forward(self, x):

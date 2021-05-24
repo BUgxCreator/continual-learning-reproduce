@@ -8,6 +8,9 @@ def main():
     param = load_json(args.config)
     args = vars(args)  # Converting argparse Namespace to a dict.
     args.update(param)  # Add parameters from json
+    '''@Author:defeng
+        first use args to get the parameter of config.json, then add the params in config.json to args.
+    '''
 
     train(args)
 
