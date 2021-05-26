@@ -28,7 +28,7 @@ class iCIFAR10(iData):
     def download_data(self):
         train_dataset = datasets.cifar.CIFAR10('./data', train=True, download=True)
         test_dataset = datasets.cifar.CIFAR10('./data', train=False, download=True)
-        self.train_data, self.train_targets = train_dataset.data, np.array(train_dataset.targets) #TODO train_dataset.data type
+        self.train_data, self.train_targets = train_dataset.data, np.array(train_dataset.targets) #TODO train_dataset.data type should be images.
         self.test_data, self.test_targets = test_dataset.data, np.array(test_dataset.targets)
 
 

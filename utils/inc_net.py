@@ -169,7 +169,7 @@ class CosineIncrementalNet(BaseNet):
     def update_fc(self, nb_classes, task_num):
         fc = self.generate_fc(self.feature_dim, nb_classes)
         if self.fc is not None:
-            if task_num == 1:
+            if task_num == 1: # increment task_num, task_num == 1 means only the first increments.
                 fc.fc1.weight.data = self.fc.weight.data
                 fc.sigma.data = self.fc.sigma.data
             else:

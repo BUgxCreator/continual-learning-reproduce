@@ -52,21 +52,26 @@ class DataManager(object):
             data.append(class_data)
             targets.append(class_targets)
 
-        '''@Author:defeng
-            TODO appendent and ret_data
-        '''
-
         if appendent is not None and len(appendent) != 0:
             appendent_data, appendent_targets = appendent
             data.append(appendent_data)
             targets.append(appendent_targets)
+            '''@Author:defeng
+                when passing apppendent(e.g. base.py _reduce_exemplar() dd,dt), the source of data and targets are not \
+                self._XX_data/_targets and the source will appendent. see the code above.
+            '''
 
         data, targets = np.concatenate(data), np.concatenate(targets) # concat a python list.
 
-        if ret_data:
+        if ret_data: # ret_data == return_data True:return data and Dummydataset ; False:return Dummydataset.
             return data, targets, DummyDataset(data, targets, trsf, self.use_path)
         else:
             return DummyDataset(data, targets, trsf, self.use_path)
+
+        '''@Author:defeng
+            appendent: enable performing transformation to some temporary data(no need to write other function)
+            ret_data: sometimes, the method call get_dataset is not need the whole data right away/it only needs the dataset(to get a loader, e.g. idx_dataset in _reduce_exemplar() base.py), so we provide dummy dataset.
+        '''
 
     def get_dataset_with_split(self, indices, source, mode, appendent=None, val_samples_per_class=0): #TODO related to BiC
         if source == 'train':
@@ -149,7 +154,11 @@ class DataManager(object):
         idxes = np.where(np.logical_and(y >= low_range, y < high_range))[0]
         return x[idxes], y[idxes]
 
-
+'''@Author:defeng
+    dummy dataset is more like a dataset for temporary use(compared to standard dataset defined in data.py)
+    24 May 2021 (Monday)
+    see for details: base.py Line 177 idx_dataset
+'''
 class DummyDataset(Dataset):
     def __init__(self, images, labels, trsf, use_path=False):
         assert len(images) == len(labels), 'Data size error!'

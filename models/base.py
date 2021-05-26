@@ -21,9 +21,14 @@ class BaseLearner(object):
         self._data_memory, self._targets_memory = np.array([]), np.array([])
         self.topk = 5
 
-        self._memory_size = args['memory_size']
-        self._memory_per_class = args['memory_per_class']
+        self._memory_size = args['memory_size'] 
+        self._memory_per_class = args['memory_per_class'] # related to fixed_memory.
         self._fixed_memory = args['fixed_memory']
+        '''@Author:defeng
+            from "samples_per_class()" we can know:
+                if fixed_memory: that the _memory_per_class is fixed
+                else: _memory_per_class is not fixed and is equal to (self._memory_size // self._total_classes).
+        '''
         self._device = args['device'][0]
         self._multiple_gpus = args['device']
 
@@ -43,7 +48,7 @@ class BaseLearner(object):
     @property
     def feature_dim(self):
         if isinstance(self._network, nn.DataParallel):
-            return self._network.module.feature_dim
+            return self._network.module.feature_dim # .module see: https://www.zhihu.com/question/67726969/answer/511220696
         else:
             return self._network.feature_dim
 
@@ -51,8 +56,8 @@ class BaseLearner(object):
         if self._fixed_memory:
             self._construct_exemplar_unified(data_manager, per_class)
         else:
-            self._reduce_exemplar(data_manager, per_class)
-            self._construct_exemplar(data_manager, per_class)
+            self._reduce_exemplar(data_manager, per_class) # first reduce exemplars of old_classes in set.
+            self._construct_exemplar(data_manager, per_class) # then add exemplars of new_classes into the set.
 
     def save_checkpoint(self, filename):
         self._network.cpu()
@@ -66,8 +71,8 @@ class BaseLearner(object):
         pass
 
     def _evaluate(self, y_pred, y_true):
-        ret = {}
-        grouped = accuracy(y_pred.T[0], y_true, self._known_classes)
+        ret = {} # ret--result
+        grouped = accuracy(y_pred.T[0], y_true, self._known_classes) #all_acc in accuracy
         ret['grouped'] = grouped
         ret['top1'] = grouped['total']
         ret['top{}'.format(self.topk)] = np.around((y_pred.T == np.tile(y_true, (self.topk, 1))).sum()*100/len(y_true),
@@ -99,7 +104,7 @@ class BaseLearner(object):
         else:
             return (self._data_memory, self._targets_memory)
 
-    def _compute_accuracy(self, model, loader):
+    def _compute_accuracy(self, model, loader): # naive acc calculation: cal acc for one batch ; _compute_accuracy(): cal acc for a whole loader, i.e., many batches.
         model.eval()
         correct, total = 0, 0
         for i, (_, inputs, targets) in enumerate(loader):
@@ -112,7 +117,7 @@ class BaseLearner(object):
 
         return np.around(tensor2numpy(correct)*100 / total, decimals=2)
 
-    def _eval_cnn(self, loader):
+    def _eval_cnn(self, loader): # cnn: traditional softmax probs for classification.
         self._network.eval()
         y_pred, y_true = [], []
         for _, (_, inputs, targets) in enumerate(loader):
@@ -125,7 +130,7 @@ class BaseLearner(object):
 
         return np.concatenate(y_pred), np.concatenate(y_true)  # [N, topk]
 
-    def _eval_nme(self, loader, class_means):
+    def _eval_nme(self, loader, class_means): # nme: nearest-mean-of-neighbors(iCaRL) for classification.
         self._network.eval()
         vectors, y_true = self._extract_vectors(loader)
         vectors = (vectors.T / (np.linalg.norm(vectors.T, axis=0) + EPSILON)).T
@@ -135,7 +140,7 @@ class BaseLearner(object):
 
         return np.argsort(scores, axis=1)[:, :self.topk], y_true  # [N, topk]
 
-    def _extract_vectors(self, loader):
+    def _extract_vectors(self, loader): # auxillary func for _eval_nme
         self._network.eval()
         vectors, targets = [], []
         for _, _inputs, _targets in loader:
@@ -151,24 +156,30 @@ class BaseLearner(object):
         return np.concatenate(vectors), np.concatenate(targets)
 
     def _reduce_exemplar(self, data_manager, m):
-        logging.info('Reducing exemplars...({} per classes)'.format(m))
+        logging.info('Reducing exemplars...({} per classes)'.format(m)) # m:saved num(identical to iCaRL, save the first K exemplars.) (proof:podnet.py)
         dummy_data, dummy_targets = copy.deepcopy(self._data_memory), copy.deepcopy(self._targets_memory)
-        self._class_means = np.zeros((self._total_classes, self.feature_dim))
-        self._data_memory, self._targets_memory = np.array([]), np.array([])
+        self._data_memory, self._targets_memory = np.array([]), np.array([]) # the original data have been stored in dummy_data/targets.
 
-        for class_idx in range(self._known_classes):
-            mask = np.where(dummy_targets == class_idx)[0]
-            dd, dt = dummy_data[mask][:m], dummy_targets[mask][:m]
-            self._data_memory = np.concatenate((self._data_memory, dd)) if len(self._data_memory) != 0 else dd
+        self._class_means = np.zeros((self._total_classes, self.feature_dim)) # cluster means
+
+        for class_idx in range(self._known_classes): # process one class at a time.
+            mask = np.where(dummy_targets == class_idx)[0] # index of all class_idx samples.
+            dd, dt = dummy_data[mask][:m], dummy_targets[mask][:m]# dd/t: dummy data/target 
+            self._data_memory = np.concatenate((self._data_memory, dd)) if len(self._data_memory) != 0 else dd 
             self._targets_memory = np.concatenate((self._targets_memory, dt)) if len(self._targets_memory) != 0 else dt
+            '''@Author:defeng
+                the _data/target_memory is empty first iter in the iteration then not empty till the end.
+                append each class_idx's new exemplars each iter.
+                (_construct_exemplar is the same process.)
+            '''
 
             # Exemplar mean
-            idx_dataset = data_manager.get_dataset([], source='train', mode='test', appendent=(dd, dt))
+            idx_dataset = data_manager.get_dataset([], source='train', mode='test', appendent=(dd, dt)) #appendent
             idx_loader = DataLoader(idx_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
             vectors, _ = self._extract_vectors(idx_loader)
-            vectors = (vectors.T / (np.linalg.norm(vectors.T, axis=0) + EPSILON)).T
+            vectors = (vectors.T / (np.linalg.norm(vectors.T, axis=0) + EPSILON)).T # normalized vector | first .T then .T corresponding.
             mean = np.mean(vectors, axis=0)
-            mean = mean / np.linalg.norm(mean)
+            mean = mean / np.linalg.norm(mean) # normalized
 
             self._class_means[class_idx, :] = mean
 
@@ -182,23 +193,25 @@ class BaseLearner(object):
             vectors = (vectors.T / (np.linalg.norm(vectors.T, axis=0) + EPSILON)).T
             class_mean = np.mean(vectors, axis=0)
 
-            # Select
+            # Select exemplar from new classes.
             selected_exemplars = []
             exemplar_vectors = []  # [n, feature_dim]
-            for k in range(1, m+1):
+            for k in range(1, m+1): # k: select k exemplars for new_classes.(see iCaRL Algo 4.)
                 S = np.sum(exemplar_vectors, axis=0)  # [feature_dim] sum of selected exemplars vectors
                 mu_p = (vectors + S) / k  # [n, feature_dim] sum to all vectors
                 i = np.argmin(np.sqrt(np.sum((class_mean - mu_p) ** 2, axis=1)))
+
                 selected_exemplars.append(np.array(data[i]))  # New object to avoid passing by inference
                 exemplar_vectors.append(np.array(vectors[i]))  # New object to avoid passing by inference
 
-                vectors = np.delete(vectors, i, axis=0)  # Remove it to avoid duplicative selection
+                vectors = np.delete(vectors, i, axis=0)  # Remove it to avoid duplicative selection | remove not del.
                 data = np.delete(data, i, axis=0)  # Remove it to avoid duplicative selection
 
             # uniques = np.unique(selected_exemplars, axis=0)
             # print('Unique elements: {}'.format(len(uniques)))
             selected_exemplars = np.array(selected_exemplars)
-            exemplar_targets = np.full(m, class_idx)
+            exemplar_targets = np.full(m, class_idx) # see meaning of class_idx.\
+
             self._data_memory = np.concatenate((self._data_memory, selected_exemplars)) if len(self._data_memory) != 0 \
                 else selected_exemplars
             self._targets_memory = np.concatenate((self._targets_memory, exemplar_targets)) if \
@@ -215,7 +228,7 @@ class BaseLearner(object):
 
             self._class_means[class_idx, :] = mean
 
-    def _construct_exemplar_unified(self, data_manager, m):
+    def _construct_exemplar_unified(self, data_manager, m): #TODO podnet
         logging.info('Constructing exemplars for new classes...({} per classes)'.format(m))
         _class_means = np.zeros((self._total_classes, self.feature_dim))
 

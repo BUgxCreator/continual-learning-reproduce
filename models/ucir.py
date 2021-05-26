@@ -52,7 +52,7 @@ class UCIR(BaseLearner):
         logging.info('Exemplar size: {}'.format(self.exemplar_size))
 
     def incremental_train(self, data_manager): #external call in trainer.py
-        self._cur_task += 1
+        self._cur_task += 1 # initial cur_task=-1. first time call incremental_train, it will add 1 and become zero.
         self._total_classes = self._known_classes + data_manager.get_task_size(self._cur_task)#total-known = task_size
         self._network.update_fc(self._total_classes, self._cur_task) #update based on new class nb.
         logging.info('Learning on {}-{}'.format(self._known_classes, self._total_classes)) #total-known = task_size
@@ -107,6 +107,10 @@ class UCIR(BaseLearner):
         self._network.to(self._device)
         if self._old_network is not None:
             self._old_network.to(self._device)
+            '''@Author:defeng
+                in base.py, "self._device = args['device'][0]"
+                that is, the old model is moved to device[0] default.
+            '''
 
         self._run(train_loader, test_loader, optimizer, scheduler)
 
@@ -148,14 +152,23 @@ class UCIR(BaseLearner):
                         # Ground truth targets
                         gt_targets = targets[old_classes_mask]  # (n)
                         old_bool_onehot = target2onehot(gt_targets, self._known_classes).type(torch.bool)
-                        anchor_positive = torch.masked_select(old_scores, old_bool_onehot)  # (n)
-                        anchor_positive = anchor_positive.view(-1, 1).repeat(1, K)  # (n, K)
+                        anchor_positive = torch.masked_select(old_scores, old_bool_onehot)  # *(n)*   |* i.e. select GT class correspoding scores.
+                        anchor_positive = anchor_positive.view(-1, 1).repeat(1, K)  # *(n, K)*   |* i.e., <\bar{\theta}, \bar(f(x))>
+                        '''@Author:defeng
+                            torch.repeat is different from numpy.repeat.
+                            see for details: https://pytorch.org/docs/stable/tensors.html?highlight=repeat#torch.Tensor.repeat
+                        '''
 
                         # Top K hard
-                        anchor_hard_negative = scores.topk(K, dim=1)[0]  # (n, K)
+                        anchor_hard_negative = scores.topk(K, dim=1)[0]  # *(n, K)* |* i.e., <\bar{\theta_{k}}, \bar(f(x))>
 
                         is_loss = F.margin_ranking_loss(anchor_positive, anchor_hard_negative,
                                                         torch.ones(K).to(self._device), margin=margin)
+                        '''@Author:defeng
+                            here, the params "torch.ones(K).to(self._device)" for margin_ranking_loss follows the params \
+                            requirements in pytorch documentation(specifically, ones(K) is the variable y).
+                            see for details: https://pytorch.org/docs/stable/generated/torch.nn.MarginRankingLoss.html#torch.nn.MarginRankingLoss
+                        '''
 
                 loss = ce_loss + lf_loss + is_loss
                 optimizer.zero_grad()
@@ -166,9 +179,9 @@ class UCIR(BaseLearner):
                 lf_losses += lf_loss.item() if self._cur_task != 0 else lf_loss
                 is_losses += is_loss.item() if self._cur_task != 0 and len(old_classes_mask) != 0 else is_loss
 
-                # acc
+                # acc(classification)
                 # TODO cur_task的作用？结合base.py | TODO 理解这里acc的计算。 | TODO get_dataset_with_split
-                _, preds = torch.max(logits, dim=1)
+                _, preds = torch.max(logits, dim=1) # pred is the indexs/location of the max value in dim1.
                 correct += preds.eq(targets.expand_as(preds)).cpu().sum()
                 total += len(targets)
 

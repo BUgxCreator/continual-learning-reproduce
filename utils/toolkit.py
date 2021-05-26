@@ -54,16 +54,17 @@ def accuracy(y_pred, y_true, nb_old, increment=10):
         '''
         label = '{}-{}'.format(str(class_id).rjust(2, '0'), str(class_id+increment-1).rjust(2, '0')) #rjust: aligh right
         all_acc[label] = np.around((y_pred[idxes] == y_true[idxes]).sum()*100 / len(idxes), decimals=2)
-    '''@Author:defeng TODO
-        
+    '''@Author:defeng 
+        Grouped acc is acc for every task, i.e., each classes in a task is viewd as a group.
+        (from "y_true >= class_id, y_true < class_id + increment)" and for iteration we can know.)
     '''
 
-    # Old accuracy
+    # Old accuracy(i.e., old for classes)
     idxes = np.where(y_true < nb_old)[0]
     all_acc['old'] = 0 if len(idxes) == 0 else np.around((y_pred[idxes] == y_true[idxes]).sum()*100 / len(idxes),
                                                          decimals=2)
 
-    # New accuracy
+    # New accuracy(i.e., acc for new classes)
     idxes = np.where(y_true >= nb_old)[0]
     all_acc['new'] = np.around((y_pred[idxes] == y_true[idxes]).sum()*100 / len(idxes), decimals=2)
 
