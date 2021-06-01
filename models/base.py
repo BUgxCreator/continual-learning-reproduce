@@ -228,7 +228,7 @@ class BaseLearner(object):
 
             self._class_means[class_idx, :] = mean
 
-    def _construct_exemplar_unified(self, data_manager, m): #TODO podnet
+    def _construct_exemplar_unified(self, data_manager, m):
         logging.info('Constructing exemplars for new classes...({} per classes)'.format(m))
         _class_means = np.zeros((self._total_classes, self.feature_dim))
 

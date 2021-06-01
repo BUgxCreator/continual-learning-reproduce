@@ -194,9 +194,6 @@ class CosineIncrementalNet(BaseNet):
             from the condition:"if self.fc is None:", we can know that
         '''
 
-'''@Author:defeng
-    TODO bias correction 来自哪篇文章？ BiC
-'''
 # -----------------------------------------------------------------
 class BiasLayer(nn.Module):
     def __init__(self):
@@ -213,7 +210,7 @@ class BiasLayer(nn.Module):
         return (self.alpha.item(), self.beta.item())
 
 
-class IncrementalNetWithBias(BaseNet): #TODO only used in BiC
+class IncrementalNetWithBias(BaseNet): 
     def __init__(self, convnet_type, pretrained, bias_correction=False):
         super().__init__(convnet_type, pretrained)
 

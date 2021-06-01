@@ -84,6 +84,10 @@ class ResNetBasicblock(nn.Module):
             residual = self.downsample(x)
 
         return F.relu(residual + basicblock, inplace=True)
+        '''@Author:defeng
+            Lien 86 means that the return value os Residualblock contains ReLU activation.
+            however, in PODNet paper, the author said "We remove the ReLU activation at the last block of each ResNet end-of-stage to provide a signed input to POD"
+        '''
 
 
 class CifarResNet(nn.Module):

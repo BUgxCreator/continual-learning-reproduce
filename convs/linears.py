@@ -21,7 +21,7 @@ class SimpleLinear(nn.Module):
         if bias:
             self.bias = nn.Parameter(torch.Tensor(out_features))
         else:
-            self.register_parameter('bias', None)#TODO
+            self.register_parameter('bias', None)
         self.reset_parameters()#initialization
 
     def reset_parameters(self):
@@ -43,10 +43,14 @@ class CosineLinear(nn.Module):
     def __init__(self, in_features, out_features, nb_proxy=1, to_reduce=False, sigma=True):
         super(CosineLinear, self).__init__()
         self.in_features = in_features
-        self.out_features = out_features * nb_proxy
+        self.out_features = out_features * nb_proxy # the concept of nb_proxy is proposed in PODNet.
         self.nb_proxy = nb_proxy
         self.to_reduce = to_reduce
         self.weight = nn.Parameter(torch.Tensor(self.out_features, in_features))
+        '''@Author:defeng
+            the implementation of proxy in PODNet. the best part here is using out_features *= nb_proxy to simulate \
+            multiple classify proxy vectors.
+        '''
         '''@Author:defeng
             sigma is actually the learnable parameter eta in ucir.
             see ucir Eq 4. for detail.
@@ -69,6 +73,15 @@ class CosineLinear(nn.Module):
         if self.to_reduce:
             # Reduce_proxy
             out = reduce_proxies(out, self.nb_proxy)
+            '''@Author:defeng
+                reduce doesn't mean reducing the number of  weights but reducing the output results follow the Eq 9. in PODNet.
+                another insight is the parameter "reduce=mean/sum" in torch implementation.
+            '''
+            '''@Author:defeng
+                it can be known that if:
+                    no-proxy: set nb_proxy = 1 && to_reduce = False
+                    need-proxy(e.g., PODNet): set nb_proxy = K && to_reduce = True. 
+            '''
 
         if self.sigma is not None:
             out = self.sigma * out
@@ -109,18 +122,23 @@ class SplitCosineLinear(nn.Module):
         }
 
 
-def reduce_proxies(out, nb_proxy):
-    if nb_proxy == 1:
+# out: Nx{Cxnb_proxy}
+def reduce_proxies(out, nb_proxy): # see PODNet Eq 9.
+    if nb_proxy == 1: # for safety
         return out
     bs = out.shape[0] #bs-batch_size
-    nb_classes = out.shape[1] / nb_proxy # shape[1]--numOfclasses
+    nb_classes = out.shape[1] / nb_proxy 
     assert nb_classes.is_integer(), 'Shape error'
     nb_classes = int(nb_classes)
 
-    simi_per_class = out.view(bs, nb_classes, nb_proxy)
-    attentions = F.softmax(simi_per_class, dim=-1)
+    simi_per_class = out.view(bs, nb_classes, nb_proxy) # simi ~ similarities
+    attentions = F.softmax(simi_per_class, dim=-1) 
+    '''@Author:defeng
+        attention: s_{c,k} in Eq 9.
+        simi_per_class: <\theta_{c,k},h> in Eq 9.
+    '''
 
-    return (attentions * simi_per_class).sum(-1)
+    return (attentions * simi_per_class).sum(-1) # \hat{y_c}
 
 
 '''

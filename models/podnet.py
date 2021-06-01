@@ -47,6 +47,7 @@ Maybe I missed something...
 +--------------------+--------------------+--------------------+--------------------+
 |   LSC-NCA (k=10)   |         5          |       64.48        |       64.37        |
 +--------------------+--------------------+--------------------+--------------------+
+  the only difference between cosine clasifier and LSC is that LSC has multiple proxy vectors.
 '''
 
 
@@ -263,10 +264,10 @@ def nca(
           Additive Margin Softmax for Face Verification.
           Signal Processing Letters 2018.
 
-    :param similarities: Result of cosine similarities between weights and features.
-    :param targets: Sparse targets.
+    :param similarities: Result of cosine similarities between weights and features. shape:NxC (batch x class_num)
+    :param targets: Sparse(one-hot like) targets.
     :param scale: Multiplicative factor, can be learned.
-    :param margin: Margin applied on the "right" (numerator) similarities.
+    :param margin: Margin applied on the "right" (numerator of Eq 10. in PODNet) similarities.
     :param memory_flags: Flags indicating memory samples, although it could indicate
                          anything else.
     :return: A float scalar loss.
@@ -274,26 +275,39 @@ def nca(
     margins = torch.zeros_like(similarities)
     margins[torch.arange(margins.shape[0]), targets] = margin
     similarities = scale * (similarities - margin)
+    '''@Author:defeng
+        calculate \eta(\hat{\bf{y}}_y - \sigma) using similarities(i.e., L2-normalized logits of classfier.)
+    '''
 
-    if exclude_pos_denominator:  # NCA-specific
+    if exclude_pos_denominator:  # exclude_pos_denominator==True: using modified NCA loss in PODNet.
         similarities = similarities - similarities.max(1)[0].view(-1, 1)  # Stability
+        '''@Author:defeng
+            to solve underflow and overflow. subtract max in both numerator and denominator.
+            see for details: https://blog.csdn.net/m0_37477175/article/details/79686164
+        '''
 
         disable_pos = torch.zeros_like(similarities)
         disable_pos[torch.arange(len(similarities)),
                     targets] = similarities[torch.arange(len(similarities)), targets]
 
         numerator = similarities[torch.arange(similarities.shape[0]), targets]
-        denominator = similarities - disable_pos
+        denominator = similarities - disable_pos # i.e. for sum_{i\neqy} in Eq 10. in PODNet.
 
         losses = numerator - torch.log(torch.exp(denominator).sum(-1))
+        '''@Author:defeng
+            1. the numerator is like log(exp^{y}) and it is equal to y. so there is no need of log for numerator.
+            2. losses, similarities, disable_pos, numerator and denominator is of the same shape.
+            3. code above calculate the numerator in Eq 10. in PODNet. see the generation of "denominator" for insight.
+        '''
+
         if class_weights is not None:
             losses = class_weights[targets] * losses
 
         losses = -losses
         if hinge_proxynca:
-            losses = torch.clamp(losses, min=0.)
+            losses = torch.clamp(losses, min=0.) # losses = min is losses < min else losses.
 
         loss = torch.mean(losses)
         return loss
 
-    return F.cross_entropy(similarities, targets, weight=class_weights, reduction="mean")
+    return F.cross_entropy(similarities, targets, weight=class_weights, reduction="mean") # CE-version of L_{LCS} in PODNet.

@@ -25,7 +25,7 @@ def target2onehot(targets, n_classes):
     onehot = torch.zeros(targets.shape[0], n_classes).to(targets.device)
     onehot.scatter_(dim=1, index=targets.long().view(-1, 1), value=1.)
     return onehot
-    '''@Author:defeng TODO the shape of the params of the func
+    '''@Author:defeng TODO(let it go) the shape of the params of the func
         I prefer using "F.one_hot(x, num_classes=C)"
         see for details: https://pytorch.org/docs/stable/nn.functional.html?highlight=one%20hot#torch.nn.functional.one_hot
     '''
@@ -35,7 +35,10 @@ def makedirs(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-
+'''@Author:defeng
+    based on all_acc, it is easy to implement the average incremental accuracy in iCaRL.
+    the average incremental accuracy is the avrage of all all_acc across time.
+'''
 def accuracy(y_pred, y_true, nb_old, increment=10):
     assert len(y_pred) == len(y_true), 'Data length error.'
 
@@ -43,7 +46,8 @@ def accuracy(y_pred, y_true, nb_old, increment=10):
     all_acc['total'] = np.around((y_pred == y_true).sum()*100 / len(y_true), decimals=2)
     '''@Author:defeng
         1. "*100" for %.
-        2. function around: https://blog.csdn.net/runmin1/article/details/89174511
+        2. function around(): https://blog.csdn.net/runmin1/article/details/89174511
+        3. total acc: acc on all classes that have been seen.
     '''
 
     # Grouped accuracy
@@ -55,14 +59,15 @@ def accuracy(y_pred, y_true, nb_old, increment=10):
         label = '{}-{}'.format(str(class_id).rjust(2, '0'), str(class_id+increment-1).rjust(2, '0')) #rjust: aligh right
         all_acc[label] = np.around((y_pred[idxes] == y_true[idxes]).sum()*100 / len(idxes), decimals=2)
     '''@Author:defeng 
-        Grouped acc is acc for every task, i.e., each classes in a task is viewd as a group.
+        Grouped acc is acc for every task, i.e., each set of multiple classes in a task is viewd as a group.
         (from "y_true >= class_id, y_true < class_id + increment)" and for iteration we can know.)
+        update: group acc is a split version of all_acc(e.g. 0-10, 10-20,...).
     '''
 
-    # Old accuracy(i.e., old for classes)
+    # Old accuracy(i.e., acc for old classes)
     idxes = np.where(y_true < nb_old)[0]
     all_acc['old'] = 0 if len(idxes) == 0 else np.around((y_pred[idxes] == y_true[idxes]).sum()*100 / len(idxes),
-                                                         decimals=2)
+                                                         decimals=2)    
 
     # New accuracy(i.e., acc for new classes)
     idxes = np.where(y_true >= nb_old)[0]

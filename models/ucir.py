@@ -180,7 +180,6 @@ class UCIR(BaseLearner):
                 is_losses += is_loss.item() if self._cur_task != 0 and len(old_classes_mask) != 0 else is_loss
 
                 # acc(classification)
-                # TODO cur_task的作用？结合base.py | TODO 理解这里acc的计算。 | TODO get_dataset_with_split
                 _, preds = torch.max(logits, dim=1) # pred is the indexs/location of the max value in dim1.
                 correct += preds.eq(targets.expand_as(preds)).cpu().sum()
                 total += len(targets)

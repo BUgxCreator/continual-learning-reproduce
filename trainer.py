@@ -58,6 +58,9 @@ def _train(args):
     )
     '''@Author:defeng
         see for details: https://www.cnblogs.com/xianyulouie/p/11041777.html
+        26 May 2021 (Wednesday)
+        format: %(filename)s enables output like this "2021-05-26 22:01:34,371 [*ucir.py*]" and we can know which file \
+        a certain output come from.
     '''
 
     '''@Author:defeng
@@ -87,7 +90,7 @@ def _train(args):
         logging.info('Trainable params: {}'.format(count_parameters(model._network, True)))
 
         model.incremental_train(data_manager) #train
-        cnn_accy, nme_accy = model.eval_task() #test
+        cnn_accy, nme_accy = model.eval_task() #val
         model.after_task()#post-processing
 
         if nme_accy is not None:

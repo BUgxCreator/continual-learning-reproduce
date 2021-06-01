@@ -73,7 +73,7 @@ class DataManager(object):
             ret_data: sometimes, the method call get_dataset is not need the whole data right away/it only needs the dataset(to get a loader, e.g. idx_dataset in _reduce_exemplar() base.py), so we provide dummy dataset.
         '''
 
-    def get_dataset_with_split(self, indices, source, mode, appendent=None, val_samples_per_class=0): #TODO related to BiC
+    def get_dataset_with_split(self, indices, source, mode, appendent=None, val_samples_per_class=0):
         if source == 'train':
             x, y = self._train_data, self._train_targets
         elif source == 'test':
@@ -148,6 +148,9 @@ class DataManager(object):
             from "Map indices" and "Order", we can know that order is to provide different "increment sequence". 
             if shuffle, the sequence will be randomly permuted.
             if not shuffle, the sequence will be linear.
+
+            def _map_new_class_index(y, order):
+                return np.array(list(map(lambda x: order.index(x), y)))
         '''
 
     def _select(self, x, y, low_range, high_range):
