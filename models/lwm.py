@@ -145,7 +145,7 @@ class LwM(BaseLearner):
             logging.info(info1 + info2)
 
 
-def gradcam_distillation(gradients_a, gradients_b, activations_a, activations_b):
+def gradcam_distillation(gradients_a, gradients_b, activations_a, activations_b): # a for after, i.e. M_{t} ; b for before, i.e. M_{t-1}
     attentions_a = _compute_gradcam_attention(gradients_a, activations_a)
     attentions_b = _compute_gradcam_attention(gradients_b, activations_b)
 
